@@ -20,6 +20,12 @@ const VIEWPORTS = [
     height: 844,
     minBoardSize: 360,
   },
+  {
+    name: "mobile-compact",
+    width: 360,
+    height: 780,
+    minBoardSize: 338,
+  },
 ];
 
 async function isReachable(url) {
@@ -121,6 +127,15 @@ function buildFailures(result) {
   }
   if (metrics.squareCount !== 64) {
     failures.push(`${viewport.name}: expected 64 squares, saw ${metrics.squareCount}`);
+  }
+  if (metrics.playerClockCount !== 2) {
+    failures.push(`${viewport.name}: expected two chess clocks, saw ${metrics.playerClockCount}`);
+  }
+  if (metrics.activeClockCount !== 1) {
+    failures.push(`${viewport.name}: expected one active chess clock, saw ${metrics.activeClockCount}`);
+  }
+  if (metrics.clockTexts.some((text) => !/^\d+:\d{2}$/.test(text))) {
+    failures.push(`${viewport.name}: unexpected clock labels ${JSON.stringify(metrics.clockTexts)}`);
   }
   if (metrics.boardSprites !== 32) {
     failures.push(`${viewport.name}: expected 32 initial board sprites, saw ${metrics.boardSprites}`);
@@ -243,6 +258,9 @@ function buildFailures(result) {
     failures.push(
       `${viewport.name}: attack marker check failed ${JSON.stringify(result.playableFlow.attackMarkerCheck)}`,
     );
+  }
+  if (!result.clockFlow.ok) {
+    failures.push(`${viewport.name}: chess clock flow failed ${JSON.stringify(result.clockFlow)}`);
   }
   if (!result.captureLayerFlow.ok) {
     failures.push(
@@ -539,6 +557,62 @@ async function runPlayableFlow(page) {
     movedCenterOffsets,
     ok: steps.every((step) => step.pass),
     steps,
+  };
+}
+
+function clockTextToSeconds(text) {
+  const match = /^(\d+):(\d{2})$/.exec(text);
+
+  if (!match) {
+    return null;
+  }
+
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+async function activeClockSnapshot(page) {
+  return page.evaluate(() => {
+    const activeTrays = [...document.querySelectorAll(".player-clock-tray.is-active")];
+    const active = activeTrays[0];
+    const label = active?.querySelector(".player-clock-meta span")?.textContent?.trim() ?? "";
+    const text = active?.querySelector(".player-clock-meta b")?.textContent?.trim() ?? "";
+
+    return {
+      activeCount: activeTrays.length,
+      label,
+      text,
+    };
+  });
+}
+
+async function runClockFlow(page) {
+  await page.reload({ waitUntil: "networkidle" });
+  await enterSinglePlayer(page);
+  await freezeBoardSprites(page);
+
+  const before = await activeClockSnapshot(page);
+  await page.waitForFunction(
+    (beforeText) => {
+      const active = document.querySelector(".player-clock-tray.is-active");
+      const text = active?.querySelector(".player-clock-meta b")?.textContent?.trim() ?? "";
+      return /^\d+:\d{2}$/.test(text) && text !== beforeText;
+    },
+    before.text,
+    { timeout: 3500 },
+  );
+  const after = await activeClockSnapshot(page);
+  const beforeSeconds = clockTextToSeconds(before.text);
+  const afterSeconds = clockTextToSeconds(after.text);
+
+  return {
+    after: { ...after, seconds: afterSeconds },
+    before: { ...before, seconds: beforeSeconds },
+    ok:
+      before.activeCount === 1 &&
+      after.activeCount === 1 &&
+      beforeSeconds !== null &&
+      afterSeconds !== null &&
+      afterSeconds < beforeSeconds,
   };
 }
 
@@ -857,6 +931,7 @@ async function collectViewport(browser, viewport) {
 
     const board = document.querySelector(".board");
     const topBar = document.querySelector(".top-bar");
+    const playerClockTrays = [...document.querySelectorAll(".player-clock-tray")];
     const squares = [...document.querySelectorAll(".board .square")];
     const pieces = [...document.querySelectorAll(".board .piece-sprite")];
     const boardRect = board.getBoundingClientRect();
@@ -1051,8 +1126,10 @@ async function collectViewport(browser, viewport) {
       boardOverflowCss: boardStyle.overflow,
       boardSprites: pieces.length,
       boardWidth: Math.round(boardRect.width),
+      activeClockCount: document.querySelectorAll(".player-clock-tray.is-active").length,
       actionCursorCss: getComputedStyle(squares[0]).cursor,
       bodyCursorCss: getComputedStyle(document.body).cursor,
+      clockTexts: playerClockTrays.map((tray) => tray.querySelector(".player-clock-meta b")?.textContent?.trim() ?? ""),
       docOverflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
       docOverflowY: document.documentElement.scrollHeight > window.innerHeight + 1,
       edgeBottomNudgeYCss: boardStyle.getPropertyValue("--piece-edge-bottom-nudge-y").trim(),
@@ -1072,6 +1149,7 @@ async function collectViewport(browser, viewport) {
       maxOverflow: Number(maxOverflow.toFixed(2)),
       opaqueSquareBackgrounds: squares.filter((square) => getComputedStyle(square).backgroundColor !== "rgba(0, 0, 0, 0)").length,
       overflowSprites: overflowPieces.length,
+      playerClockCount: playerClockTrays.length,
       attackMarkerImage,
       pieceScaleCss: boardStyle.getPropertyValue("--piece-board-scale").trim(),
       sceneBackground1x,
@@ -1169,6 +1247,10 @@ async function collectViewport(browser, viewport) {
   await page.reload({ waitUntil: "networkidle" });
   await enterSinglePlayer(page);
   await freezeBoardSprites(page);
+  const clockFlow = await runClockFlow(page);
+  await page.reload({ waitUntil: "networkidle" });
+  await enterSinglePlayer(page);
+  await freezeBoardSprites(page);
   const playableFlow = await runPlayableFlow(page);
   const captureLayerFlow = await runCaptureLayerFlow(page);
   const recoveryFlow = await runRecoveryFlow(page);
@@ -1181,6 +1263,7 @@ async function collectViewport(browser, viewport) {
     metrics,
     pageErrors,
     captureLayerFlow,
+    clockFlow,
     playableFlow,
     recoveryFlow,
     selectionMismatches,
@@ -1227,6 +1310,7 @@ try {
       consoleErrors: result.consoleErrors,
       pageErrors: result.pageErrors,
       captureLayerFlow: result.captureLayerFlow,
+      clockFlow: result.clockFlow,
       playableFlow: result.playableFlow,
       recoveryFlow: result.recoveryFlow,
       selectionMismatches: result.selectionMismatches,

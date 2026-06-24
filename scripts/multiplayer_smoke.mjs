@@ -114,8 +114,22 @@ try {
     throw new Error(`Expected Yuna to be black. Players: ${JSON.stringify(players)}`);
   }
 
+  const initialWhiteTimeMs = roomA.state.whiteTimeMs;
+  if (!(initialWhiteTimeMs > 0) || roomA.state.blackTimeMs !== initialWhiteTimeMs) {
+    throw new Error(
+      `Expected initialized chess clocks. w=${roomA.state.whiteTimeMs} b=${roomA.state.blackTimeMs}`,
+    );
+  }
+
+  await delay(1250);
+  await waitForState(roomA, (state) => state.whiteTimeMs < initialWhiteTimeMs);
+
   roomA.send("move", { from: "e2", to: "e4" });
   await waitForState(roomB, (state) => state.lastFrom === "e2" && state.lastTo === "e4");
+  const blackTimeAfterMoveMs = roomA.state.blackTimeMs;
+
+  await delay(1250);
+  await waitForState(roomA, (state) => state.blackTimeMs < blackTimeAfterMoveMs);
 
   roomA.send("chat", { text: "안녕!" });
   await waitForState(roomB, (state) =>
@@ -150,6 +164,12 @@ try {
         players,
         lastMove: `${roomB.state.lastFrom}${roomB.state.lastTo}`,
         listedRoom,
+        clocks: {
+          blackAfterWaitMs: roomA.state.blackTimeMs,
+          blackTimeAfterMoveMs,
+          initialWhiteTimeMs,
+          whiteAfterWaitMs: roomA.state.whiteTimeMs,
+        },
         randomRoomId: roomC.roomId,
         serverLog: serverLog.trim().split("\n").slice(-2),
       },

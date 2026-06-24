@@ -60,7 +60,7 @@ button {
 }
 
 .app-shell {
-  --board-reserve: 160px;
+  --board-reserve: 162px;
   position: relative;
   width: min(100%, 760px);
   min-height: 100dvh;
@@ -69,7 +69,7 @@ button {
   display: grid;
   grid-template-rows: auto auto auto;
   align-content: start;
-  gap: 7px;
+  gap: 6px;
   background:
     radial-gradient(ellipse at 50% 40%, rgba(21, 38, 39, 0.76) 0 34%, rgba(21, 38, 39, 0.44) 58%, rgba(255, 221, 230, 0.12) 100%),
     linear-gradient(180deg, rgba(255, 245, 231, 0.18), rgba(25, 48, 49, 0.34) 38%, rgba(13, 30, 32, 0.5)),
@@ -586,7 +586,7 @@ button {
 
 .turn-chip {
   min-width: 0;
-  max-width: calc(100% - 108px);
+  max-width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -754,18 +754,79 @@ button:disabled {
   color: #ffd9e1;
 }
 
-.capture-tray {
+.player-clock-tray {
   min-height: 32px;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  padding: 0 4px;
-  border-top: 1px solid rgba(255, 247, 232, 0.15);
-  border-bottom: 1px solid rgba(255, 247, 232, 0.12);
+  gap: 6px;
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 247, 232, 0.14);
+  border-radius: 999px;
+  background: rgba(23, 48, 51, 0.26);
+  box-shadow: 0 10px 22px rgba(8, 20, 22, 0.12);
+  backdrop-filter: blur(7px);
+}
+
+.player-clock-tray.is-active {
+  border-color: rgba(229, 185, 101, 0.44);
+  background: rgba(23, 48, 51, 0.38);
+}
+
+.player-clock-meta {
+  min-width: 104px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: rgba(255, 247, 232, 0.84);
+  background: rgba(255, 247, 232, 0.1);
+  font-weight: 950;
+}
+
+.player-clock-meta span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.66rem;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-clock-meta b {
+  color: #fff7e9;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.86rem;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.player-clock-tray.is-active .player-clock-meta {
+  color: #4d3228;
+  background: linear-gradient(180deg, #fff0d4, #e5b965);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 247, 232, 0.28),
+    0 8px 18px rgba(20, 13, 9, 0.18);
+}
+
+.player-clock-tray.is-active .player-clock-meta b {
+  color: #38261f;
+}
+
+.player-clock-tray.is-low-time .player-clock-meta {
+  background: linear-gradient(180deg, #ffdce3, #d8707d);
+  color: #4a2028;
+}
+
+.player-clock-tray.is-low-time .player-clock-meta b {
+  color: #4a2028;
 }
 
 .captured-list {
   width: 100%;
-  min-height: 30px;
+  min-height: 28px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -780,9 +841,9 @@ button:disabled {
 
 .captured-piece,
 .capture-slot {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   display: grid;
   place-items: center;
   border-radius: 8px;
@@ -802,8 +863,8 @@ button:disabled {
 }
 
 .captured-list .piece-sprite {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   max-width: none;
   max-height: none;
   animation: none;
@@ -817,7 +878,7 @@ button:disabled {
   position: relative;
   width: 100%;
   align-self: center;
-  padding-top: 14px;
+  padding-top: 10px;
 }
 
 .board {
@@ -1519,7 +1580,6 @@ button:disabled {
   }
 
   .turn-chip {
-    max-width: calc(100% - 104px);
     gap: 6px;
     padding-inline: 8px;
   }
@@ -1551,8 +1611,25 @@ button:disabled {
     display: none;
   }
 
-  .capture-tray {
-    padding-inline: 4px;
+  .player-clock-tray {
+    min-height: 32px;
+    gap: 5px;
+    padding: 2px 4px;
+  }
+
+  .player-clock-meta {
+    min-width: 92px;
+    gap: 5px;
+    padding: 5px 7px;
+  }
+
+  .player-clock-meta span {
+    max-width: 40px;
+    font-size: 0.62rem;
+  }
+
+  .player-clock-meta b {
+    font-size: 0.84rem;
   }
 
   .captured-list {

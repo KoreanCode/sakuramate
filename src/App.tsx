@@ -51,6 +51,7 @@ type SoundCue = "select" | "move" | "attack" | "hurt" | "defeat" | "check" | "ch
 type SoundDetail = {
   piece?: PieceSymbol;
 };
+type ClockState = Record<Color, number>;
 
 type InitialGameState = {
   fen: string;
@@ -119,6 +120,11 @@ type OChessServerState = {
   status?: string;
   moveNumber?: number;
   moveId?: number;
+  whiteTimeMs?: number;
+  blackTimeMs?: number;
+  clockUpdatedAt?: number;
+  clockRunning?: boolean;
+  timedOutColor?: string;
   lastFrom?: string;
   lastTo?: string;
   lastSan?: string;
@@ -189,6 +195,7 @@ const storageNoticeText: Record<StorageNotice, string> = {
 
 const promotionOrder: PieceSymbol[] = ["q", "n", "r", "b"];
 const attackMarkerPath = "/assets/ui/attack-marker.png";
+const initialClockMs = 10 * 60 * 1000;
 const pieceValues: Record<PieceSymbol, number> = {
   p: 1,
   n: 3,
@@ -393,6 +400,25 @@ function numberOrZero(value: number | undefined): number {
   return Number.isFinite(value) ? Number(value) : 0;
 }
 
+function freshClockState(): ClockState {
+  return {
+    w: initialClockMs,
+    b: initialClockMs,
+  };
+}
+
+function clampClockMs(value: number | undefined): number {
+  return Math.max(0, Number.isFinite(value) ? Number(value) : initialClockMs);
+}
+
+function formatClock(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function readServerPlayers(players: OChessServerState["players"]): MultiplayerPlayer[] {
   const list: MultiplayerPlayer[] = [];
 
@@ -551,15 +577,36 @@ function PieceSprite({
   );
 }
 
-function CapturedTray({
-  title,
+function PlayerClockTray({
+  color,
+  isActive,
+  playerName,
   pieces,
+  timeMs,
 }: {
-  title: string;
+  color: Color;
+  isActive: boolean;
+  playerName: string;
   pieces: Piece[];
+  timeMs: number;
 }) {
+  const clockText = formatClock(timeMs);
+  const isLowTime = timeMs <= 30_000;
+
   return (
-    <section className="capture-tray" aria-label={`${title} ${pieces.length}개`}>
+    <section
+      className={[
+        "player-clock-tray",
+        `player-${color}`,
+        isActive ? "is-active" : "",
+        isLowTime ? "is-low-time" : "",
+      ].join(" ")}
+      aria-label={`${playerName} 남은 시간 ${clockText}, 포획 ${pieces.length}개`}
+    >
+      <div className="player-clock-meta">
+        <span>{playerName}</span>
+        <b>{clockText}</b>
+      </div>
       <div className={["captured-list", pieces.length === 0 ? "is-empty" : ""].join(" ")}>
         {pieces.length > 0
           ? pieces.map((piece, index) => (
@@ -1215,10 +1262,15 @@ export default function App() {
   const [isComputerThinking, setIsComputerThinking] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(readSoundPreference);
   const [musicEnabled, setMusicEnabled] = useState(readMusicPreference);
+  const [clock, setClock] = useState<ClockState>(freshClockState);
+  const [clockRunning, setClockRunning] = useState(false);
+  const [timedOutColor, setTimedOutColor] = useState<Color | null>(null);
+  const lastClockUpdateRef = useRef(Date.now());
 
   const game = gameRef.current;
   const isInCheck = game.isCheck();
   const isCheckmate = game.isCheckmate();
+  const hasTimedOut = timedOutColor !== null;
   const checkAlertText = isCheckmate ? "체크메이트!" : "체크!";
   const squares = useMemo(() => buildSquares(orientation), [orientation]);
   const history = useMemo(() => game.history({ verbose: true }), [fen, game]);
@@ -1256,7 +1308,11 @@ export default function App() {
     () => new Map(multiplayer.players.map((player) => [player.color, player])),
     [multiplayer.players],
   );
-  const canUndo = playMode === "single" && history.length > 0;
+  const playerLabels: Record<Color, string> = {
+    w: playersByColor.get("w")?.name || sideNames.w,
+    b: playersByColor.get("b")?.name || sideNames.b,
+  };
+  const canUndo = playMode === "single" && history.length > 0 && !hasTimedOut;
   const hasProgress = history.length > 0;
   const isMyMultiplayerTurn =
     playMode !== "multi" ||
@@ -1266,9 +1322,16 @@ export default function App() {
     playMode === "single" &&
     game.turn() === "b" &&
     !game.isGameOver() &&
+    !hasTimedOut &&
     !pendingPromotion;
+  const activeClockColor: Color | null =
+    screen === "game" && clockRunning && !game.isGameOver() && !hasTimedOut
+      ? game.turn()
+      : null;
   const displayStatus =
-    playMode === "multi"
+    hasTimedOut
+      ? `${sideNames[timedOutColor === "w" ? "b" : "w"]} 시간승`
+      : playMode === "multi"
       ? multiplayer.status === "connecting"
         ? "멀티 연결 중"
         : multiplayer.statusText || statusText(game)
@@ -1290,6 +1353,48 @@ export default function App() {
   }, [fen, game, orientation, playMode]);
 
   useEffect(() => {
+    lastClockUpdateRef.current = Date.now();
+
+    if (!activeClockColor) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const delta = Math.max(0, now - lastClockUpdateRef.current);
+      lastClockUpdateRef.current = now;
+
+      if (delta === 0) {
+        return;
+      }
+
+      setClock((current) => {
+        const nextValue = Math.max(0, current[activeClockColor] - delta);
+
+        if (nextValue === current[activeClockColor]) {
+          return current;
+        }
+
+        if (nextValue === 0) {
+          window.setTimeout(() => {
+            setTimedOutColor((currentTimedOut) => currentTimedOut ?? activeClockColor);
+            setClockRunning(false);
+          }, 0);
+        }
+
+        return {
+          ...current,
+          [activeClockColor]: nextValue,
+        };
+      });
+    }, 250);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [activeClockColor]);
+
+  useEffect(() => {
     return () => {
       const room = roomRef.current;
       roomRef.current = null;
@@ -1306,6 +1411,13 @@ export default function App() {
     setPendingPromotion(null);
     setMotions({});
     setGhosts([]);
+  }
+
+  function resetClocks(running = true) {
+    setClock(freshClockState());
+    setTimedOutColor(null);
+    setClockRunning(running);
+    lastClockUpdateRef.current = Date.now();
   }
 
   function playSound(cue: SoundCue, piece?: PieceSymbol) {
@@ -1401,6 +1513,13 @@ export default function App() {
     gameRef.current = nextGame;
     setFen(nextGame.fen());
     setOrientation(nextColor === "b" ? "b" : "w");
+    setClock({
+      w: clampClockMs(state.whiteTimeMs),
+      b: clampClockMs(state.blackTimeMs),
+    });
+    setTimedOutColor(asColor(state.timedOutColor));
+    setClockRunning(Boolean(state.clockRunning));
+    lastClockUpdateRef.current = numberOrZero(state.clockUpdatedAt) || Date.now();
 
     if (moveId > lastServerMoveIdRef.current) {
       const to = state.lastTo as Square | undefined;
@@ -1533,6 +1652,7 @@ export default function App() {
     writeNickname(playerName);
     leaveMultiplayerRoom();
     clearBoardUi();
+    resetClocks(false);
     setMultiplayer({ ...initialMultiplayerState, status: "connecting" });
 
     try {
@@ -1625,12 +1745,14 @@ export default function App() {
     if (playMode === "multi") {
       roomRef.current?.send("restart");
       clearBoardUi();
+      resetClocks(false);
       return;
     }
 
     game.reset();
     setFen(game.fen());
     clearBoardUi();
+    resetClocks(true);
   }
 
   function startSinglePlayer() {
@@ -1641,6 +1763,7 @@ export default function App() {
     setOrientation("w");
     setFen(freshGame.fen());
     clearBoardUi();
+    resetClocks(true);
     setScreen("game");
     startMusicIfEnabled();
   }
@@ -1650,6 +1773,7 @@ export default function App() {
     setPlayMode("single");
     setOrientation("w");
     clearBoardUi();
+    resetClocks(true);
     setScreen("game");
     startMusicIfEnabled();
   }
@@ -1667,6 +1791,7 @@ export default function App() {
     }
 
     clearBoardUi();
+    resetClocks(false);
     setHomeMode("menu");
     setLobbyView("list");
     setScreen("home");
@@ -1778,6 +1903,10 @@ export default function App() {
   }
 
   function submitMove(from: Square, to: Square, promotion?: PieceSymbol) {
+    if (hasTimedOut) {
+      return;
+    }
+
     if (playMode === "multi") {
       if (!roomRef.current || multiplayer.color !== game.turn()) {
         return;
@@ -1813,6 +1942,10 @@ export default function App() {
   }
 
   function onSquarePress(square: Square) {
+    if (hasTimedOut) {
+      return;
+    }
+
     if (isSinglePlayerBotTurn || isComputerThinking) {
       return;
     }
@@ -2013,7 +2146,13 @@ export default function App() {
         </aside>
       ) : null}
 
-      <CapturedTray title="블랙 포획" pieces={captured.b} />
+      <PlayerClockTray
+        color="b"
+        isActive={activeClockColor === "b"}
+        pieces={captured.b}
+        playerName={playerLabels.b}
+        timeMs={clock.b}
+      />
 
       <section className="board-wrap" aria-label="체스 보드">
         <div className="board" onClickCapture={onBoardClickCapture}>
@@ -2118,7 +2257,13 @@ export default function App() {
         ) : null}
       </section>
 
-      <CapturedTray title="화이트 포획" pieces={captured.w} />
+      <PlayerClockTray
+        color="w"
+        isActive={activeClockColor === "w"}
+        pieces={captured.w}
+        playerName={playerLabels.w}
+        timeMs={clock.w}
+      />
       {playMode === "multi" ? (
         <MultiplayerDock
           multiplayer={multiplayer}
