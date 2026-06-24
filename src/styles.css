@@ -934,7 +934,7 @@ button:disabled {
 }
 
 .square:has(.king-name-label),
-.square:has(.king-chat-bubble) {
+.square:has(.king-chat-anchor) {
   z-index: 9;
 }
 
@@ -1088,11 +1088,25 @@ button:disabled {
   translate: -50% 0;
 }
 
+.king-chat-anchor {
+  position: absolute;
+  left: calc(50% + var(--piece-nudge-x));
+  top: calc(-18% + var(--piece-nudge-y));
+  z-index: 12;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.king-chat-anchor.anchor-selected {
+  top: calc(-30% + var(--piece-nudge-y));
+}
+
 .king-chat-bubble {
   position: absolute;
   left: 50%;
-  top: -34%;
-  z-index: 11;
+  bottom: 8px;
+  display: block;
   width: max-content;
   min-width: 34px;
   max-width: clamp(96px, 30vw, 210px);
@@ -1687,8 +1701,18 @@ button:disabled {
   }
 
   .king-chat-bubble {
-    top: -42%;
     max-width: clamp(90px, 42vw, 168px);
+  }
+}
+
+@media (max-width: 768px), (pointer: coarse) {
+  .home-nickname input,
+  .room-title-field input,
+  .chat-form input,
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 

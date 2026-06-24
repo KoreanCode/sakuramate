@@ -2187,9 +2187,6 @@ export default function App() {
                 onClick={() => onSquarePress(square)}
               >
                 <span className="coord">{square}</span>
-                {kingPlayer?.chatText ? (
-                  <span className="king-chat-bubble">{kingPlayer.chatText}</span>
-                ) : null}
                 {piece ? (
                   <PieceSprite
                     key={`${square}-${piece.color}-${piece.type}`}
@@ -2197,6 +2194,11 @@ export default function App() {
                     state={state}
                     squareIndex={index}
                   />
+                ) : null}
+                {kingPlayer?.chatText ? (
+                  <span className={["king-chat-anchor", `anchor-${state}`].join(" ")}>
+                    <span className="king-chat-bubble">{kingPlayer.chatText}</span>
+                  </span>
                 ) : null}
                 {kingPlayer ? (
                   <span className="king-name-label">{kingPlayer.name}</span>
