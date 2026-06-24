@@ -244,6 +244,11 @@ function buildFailures(result) {
       `${viewport.name}: attack marker check failed ${JSON.stringify(result.playableFlow.attackMarkerCheck)}`,
     );
   }
+  if (!result.captureLayerFlow.ok) {
+    failures.push(
+      `${viewport.name}: capture layer flow failed ${JSON.stringify(result.captureLayerFlow.steps)}`,
+    );
+  }
   if (!result.recoveryFlow.ok) {
     failures.push(
       `${viewport.name}: singleplayer recovery flow failed ${JSON.stringify(
@@ -553,6 +558,89 @@ async function pieceAtSquare(page, square) {
       kind: [...piece.classList].find((className) => className.startsWith("piece-kind-")) ?? null,
     };
   }, square);
+}
+
+async function runCaptureLayerFlow(page) {
+  const steps = [];
+
+  await page.evaluate(() => {
+    window.localStorage.setItem(
+      "ochess:game:v1",
+      JSON.stringify({
+        orientation: "w",
+        pgn: "1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6",
+        savedAt: new Date().toISOString(),
+      }),
+    );
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await waitForHomeScreen(page);
+  await page.getByRole("button", { name: "저장된 게임 이어하기" }).click();
+  await waitForBoardSprites(page);
+  await freezeBoardSprites(page);
+
+  const selectedTarget = await boardPointForSquare(page, "h5", "visual");
+  const selectedClicked = await clickBoardPoint(page, selectedTarget);
+  const selectedSquare = await currentSelectedSquare(page);
+  steps.push({
+    action: "capture select h5",
+    pass: selectedClicked && selectedSquare === "h5",
+    selectedSquare,
+  });
+
+  const captureTarget = await boardPointForSquare(page, "f7", "square");
+  const captureClicked = await clickBoardPoint(page, captureTarget);
+  await page.waitForTimeout(120);
+  const duringCapture = await page.evaluate(() => {
+    const square = [...document.querySelectorAll(".board .square")].find(
+      (candidate) => candidate.getAttribute("aria-label") === "f7",
+    );
+    const attacker = square?.querySelector(":scope > .piece-sprite");
+    const ghostLayer = square?.querySelector(".ghost-layer");
+    const ghost = ghostLayer?.querySelector(".piece-sprite");
+    const classList = (element) => element ? [...element.classList] : [];
+
+    return {
+      attackerClasses: classList(attacker),
+      attackerZIndex: attacker ? Number.parseInt(getComputedStyle(attacker).zIndex, 10) : null,
+      ghostClasses: classList(ghost),
+      ghostLayerZIndex: ghostLayer ? Number.parseInt(getComputedStyle(ghostLayer).zIndex, 10) : null,
+      ghostCount: square?.querySelectorAll(".ghost-layer").length ?? 0,
+      status: document.querySelector("h1")?.textContent?.trim() ?? "",
+    };
+  });
+  steps.push({
+    action: "capture layer order",
+    ...duringCapture,
+    pass:
+      captureClicked &&
+      duringCapture.attackerClasses.includes("piece-w") &&
+      duringCapture.attackerClasses.includes("piece-kind-queen") &&
+      duringCapture.ghostClasses.includes("piece-b") &&
+      duringCapture.ghostClasses.includes("piece-kind-pawn") &&
+      duringCapture.ghostCount === 1 &&
+      duringCapture.attackerZIndex > duringCapture.ghostLayerZIndex,
+  });
+
+  await page.waitForTimeout(900);
+  const after = await pieceAtSquare(page, "f7");
+  const ghostCountAfter = await page.evaluate(() => {
+    return document.querySelectorAll(".board .square[aria-label='f7'] .ghost-layer").length;
+  });
+  steps.push({
+    action: "capture settles as attacker color",
+    after,
+    ghostCountAfter,
+    pass:
+      after?.color === "piece-w" &&
+      after?.kind === "piece-kind-queen" &&
+      ghostCountAfter === 0,
+  });
+
+  return {
+    ok: steps.every((step) => step.pass),
+    steps,
+  };
 }
 
 async function runRecoveryFlow(page) {
@@ -1082,6 +1170,7 @@ async function collectViewport(browser, viewport) {
   await enterSinglePlayer(page);
   await freezeBoardSprites(page);
   const playableFlow = await runPlayableFlow(page);
+  const captureLayerFlow = await runCaptureLayerFlow(page);
   const recoveryFlow = await runRecoveryFlow(page);
 
   await context.close();
@@ -1091,6 +1180,7 @@ async function collectViewport(browser, viewport) {
     homeMetrics,
     metrics,
     pageErrors,
+    captureLayerFlow,
     playableFlow,
     recoveryFlow,
     selectionMismatches,
@@ -1136,6 +1226,7 @@ try {
       metrics: result.metrics,
       consoleErrors: result.consoleErrors,
       pageErrors: result.pageErrors,
+      captureLayerFlow: result.captureLayerFlow,
       playableFlow: result.playableFlow,
       recoveryFlow: result.recoveryFlow,
       selectionMismatches: result.selectionMismatches,

@@ -675,6 +675,10 @@ button {
   background: rgba(255, 247, 232, 0.12);
 }
 
+.icon-row button.is-muted {
+  opacity: 0.66;
+}
+
 button:disabled {
   opacity: 0.42;
   cursor: var(--cursor-default);
@@ -973,7 +977,7 @@ button:disabled {
   --piece-kind-nudge-x: 0%;
   --piece-kind-nudge-y: 0%;
   position: relative;
-  z-index: 2;
+  z-index: 4;
   width: 111%;
   height: 111%;
   object-fit: contain;
@@ -1160,8 +1164,13 @@ button:disabled {
   inset: 0;
   display: grid;
   place-items: center;
-  z-index: 3;
+  z-index: 2;
+  opacity: 0.7;
   pointer-events: none;
+}
+
+.ghost-layer .piece-sprite {
+  z-index: 1;
 }
 
 .promotion-panel {

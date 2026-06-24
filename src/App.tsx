@@ -6,6 +6,7 @@ import {
   Home,
   LogIn,
   MessageCircle,
+  Music,
   Play,
   Plus,
   RefreshCw,
@@ -132,6 +133,7 @@ type OChessClientRoom = ColyseusRoom<unknown, OChessServerState>;
 const storageKey = "ochess:game:v1";
 const nicknameKey = "ochess:nickname";
 const soundKey = "ochess:sound:v1";
+const musicKey = "ochess:music:v1";
 const files = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
 const ranks = [8, 7, 6, 5, 4, 3, 2, 1] as const;
 
@@ -312,6 +314,30 @@ function writeSoundPreference(enabled: boolean) {
     window.localStorage.setItem(soundKey, enabled ? "on" : "off");
   } catch {
     // Sound preference is optional; gameplay should not depend on storage.
+  }
+}
+
+function readMusicPreference(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  try {
+    return window.localStorage.getItem(musicKey) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function writeMusicPreference(enabled: boolean) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(musicKey, enabled ? "on" : "off");
+  } catch {
+    // Music preference is optional; gameplay should not depend on storage.
   }
 }
 
@@ -895,6 +921,8 @@ type AudioWindow = Window &
 
 type OChessAudioEngine = {
   play(cue: SoundCue): void;
+  startMusic(): void;
+  stopMusic(): void;
 };
 
 const soundLines: Record<SoundCue, string[]> = {
@@ -909,6 +937,9 @@ const soundLines: Record<SoundCue, string[]> = {
 
 function createOChessAudioEngine(): OChessAudioEngine {
   let audioContext: AudioContext | null = null;
+  let musicGain: GainNode | null = null;
+  let musicTimer: number | null = null;
+  let musicBar = 0;
 
   function ensureContext(): AudioContext | null {
     if (typeof window === "undefined") {
@@ -960,6 +991,87 @@ function createOChessAudioEngine(): OChessAudioEngine {
     gain.connect(context.destination);
     oscillator.start(start);
     oscillator.stop(start + duration + 0.03);
+  }
+
+  function ensureMusicGain(): { context: AudioContext; gain: GainNode } | null {
+    const context = ensureContext();
+
+    if (!context) {
+      return null;
+    }
+
+    if (!musicGain) {
+      musicGain = context.createGain();
+      musicGain.gain.setValueAtTime(0.0001, context.currentTime);
+      musicGain.connect(context.destination);
+    }
+
+    return { context, gain: musicGain };
+  }
+
+  function playMusicTone(
+    context: AudioContext,
+    destination: GainNode,
+    frequency: number,
+    start: number,
+    duration: number,
+    volume: number,
+    type: OscillatorType = "triangle",
+  ) {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + 0.035);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+    oscillator.connect(gain);
+    gain.connect(destination);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.05);
+  }
+
+  function scheduleMusicBar() {
+    const music = ensureMusicGain();
+
+    if (!music) {
+      return;
+    }
+
+    const { context, gain } = music;
+    const beat = 0.46;
+    const base = context.currentTime + 0.06;
+    const melodyPatterns = [
+      [659.25, 783.99, 880, 783.99, 659.25, 587.33, 659.25, 493.88],
+      [587.33, 659.25, 783.99, 987.77, 880, 783.99, 659.25, 587.33],
+      [493.88, 587.33, 659.25, 783.99, 659.25, 587.33, 493.88, 440],
+      [523.25, 659.25, 783.99, 880, 987.77, 880, 783.99, 659.25],
+    ];
+    const bassPatterns = [
+      [164.81, 164.81, 196, 196],
+      [146.83, 146.83, 196, 196],
+      [130.81, 130.81, 164.81, 164.81],
+      [146.83, 164.81, 196, 246.94],
+    ];
+    const melody = melodyPatterns[musicBar % melodyPatterns.length];
+    const bass = bassPatterns[musicBar % bassPatterns.length];
+
+    melody.forEach((frequency, index) => {
+      const start = base + index * beat;
+      playMusicTone(context, gain, frequency, start, beat * 0.58, 0.018, "triangle");
+
+      if (index % 2 === 0) {
+        playMusicTone(context, gain, frequency * 2, start + 0.03, beat * 0.34, 0.006, "sine");
+      }
+    });
+
+    bass.forEach((frequency, index) => {
+      playMusicTone(context, gain, frequency, base + index * beat * 2, beat * 1.15, 0.012, "sine");
+    });
+
+    musicBar += 1;
   }
 
   function playNoise(delay: number, duration: number, volume: number) {
@@ -1083,6 +1195,38 @@ function createOChessAudioEngine(): OChessAudioEngine {
           break;
       }
     },
+    startMusic() {
+      if (typeof window === "undefined" || musicTimer !== null) {
+        return;
+      }
+
+      const music = ensureMusicGain();
+
+      if (!music) {
+        return;
+      }
+
+      const now = music.context.currentTime;
+      music.gain.gain.cancelScheduledValues(now);
+      music.gain.gain.setValueAtTime(Math.max(music.gain.gain.value, 0.0001), now);
+      music.gain.gain.linearRampToValueAtTime(0.78, now + 0.42);
+      scheduleMusicBar();
+      musicTimer = window.setInterval(scheduleMusicBar, 3600);
+    },
+    stopMusic() {
+      if (typeof window !== "undefined" && musicTimer !== null) {
+        window.clearInterval(musicTimer);
+      }
+
+      musicTimer = null;
+
+      if (audioContext && musicGain) {
+        const now = audioContext.currentTime;
+        musicGain.gain.cancelScheduledValues(now);
+        musicGain.gain.setValueAtTime(Math.max(musicGain.gain.value, 0.0001), now);
+        musicGain.gain.linearRampToValueAtTime(0.0001, now + 0.28);
+      }
+    },
   };
 }
 
@@ -1117,6 +1261,7 @@ export default function App() {
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
   const [isComputerThinking, setIsComputerThinking] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(readSoundPreference);
+  const [musicEnabled, setMusicEnabled] = useState(readMusicPreference);
 
   const game = gameRef.current;
   const isInCheck = game.isCheck();
@@ -1198,6 +1343,8 @@ export default function App() {
       if (room) {
         void room.leave();
       }
+
+      audioRef.current?.stopMusic();
     };
   }, []);
 
@@ -1220,6 +1367,18 @@ export default function App() {
     audioRef.current.play(cue);
   }
 
+  function startMusicIfEnabled() {
+    if (!musicEnabled) {
+      return;
+    }
+
+    if (!audioRef.current) {
+      audioRef.current = createOChessAudioEngine();
+    }
+
+    audioRef.current.startMusic();
+  }
+
   function toggleSound() {
     const nextEnabled = !soundEnabled;
     setSoundEnabled(nextEnabled);
@@ -1231,6 +1390,22 @@ export default function App() {
       }
 
       audioRef.current.play("select");
+    }
+  }
+
+  function toggleMusic() {
+    const nextEnabled = !musicEnabled;
+    setMusicEnabled(nextEnabled);
+    writeMusicPreference(nextEnabled);
+
+    if (!audioRef.current) {
+      audioRef.current = createOChessAudioEngine();
+    }
+
+    if (nextEnabled) {
+      audioRef.current.startMusic();
+    } else {
+      audioRef.current.stopMusic();
     }
   }
 
@@ -1426,6 +1601,7 @@ export default function App() {
       setPlayMode("multi");
       setIsComputerThinking(false);
       setScreen("game");
+      startMusicIfEnabled();
 
       room.onMessage<{ reason?: string }>("move-error", (payload) => {
         setMultiplayer((current) => ({
@@ -1510,6 +1686,7 @@ export default function App() {
     setFen(freshGame.fen());
     clearBoardUi();
     setScreen("game");
+    startMusicIfEnabled();
   }
 
   function continueSinglePlayer() {
@@ -1518,9 +1695,12 @@ export default function App() {
     setOrientation("w");
     clearBoardUi();
     setScreen("game");
+    startMusicIfEnabled();
   }
 
   function returnHome() {
+    audioRef.current?.stopMusic();
+
     if (playMode === "multi") {
       leaveMultiplayerRoom();
       const freshGame = new Chess();
@@ -1834,6 +2014,15 @@ export default function App() {
           </button>
           <button
             type="button"
+            className={musicEnabled ? "" : "is-muted"}
+            title={musicEnabled ? "브금 끄기" : "브금 켜기"}
+            aria-label={musicEnabled ? "브금 끄기" : "브금 켜기"}
+            onClick={toggleMusic}
+          >
+            <Music size={17} />
+          </button>
+          <button
+            type="button"
             title="되돌리기"
             aria-label="되돌리기"
             onClick={undoMove}
@@ -1907,6 +2096,7 @@ export default function App() {
                 ) : null}
                 {piece ? (
                   <PieceSprite
+                    key={`${square}-${piece.color}-${piece.type}`}
                     piece={piece}
                     state={state}
                     squareIndex={index}
@@ -1927,6 +2117,7 @@ export default function App() {
                 {squareGhosts.map((ghost) => (
                   <span className="ghost-layer" key={ghost.id}>
                     <PieceSprite
+                      key={`${ghost.id}-${ghost.piece.color}-${ghost.piece.type}-${ghost.state}`}
                       piece={ghost.piece}
                       state={ghost.state}
                       squareIndex={index}
