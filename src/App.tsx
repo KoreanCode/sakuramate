@@ -48,6 +48,9 @@ type SavedGame = {
 
 type StorageNotice = "save-reset" | "save-unavailable";
 type SoundCue = "select" | "move" | "attack" | "hurt" | "defeat" | "check" | "checkmate";
+type SoundDetail = {
+  piece?: PieceSymbol;
+};
 
 type InitialGameState = {
   fen: string;
@@ -920,19 +923,124 @@ type AudioWindow = Window &
   };
 
 type OChessAudioEngine = {
-  play(cue: SoundCue): void;
+  play(cue: SoundCue, detail?: SoundDetail): void;
   startMusic(): void;
   stopMusic(): void;
+  stopVoices(): void;
 };
 
-const soundLines: Record<SoundCue, string[]> = {
-  select: ["응?", "갈까?", "나야?"],
-  move: ["슝!", "착지!", "가자!"],
-  attack: ["에잇!", "받아라!", "틈 발견!"],
-  hurt: ["아얏!", "너무해!", "히잉!"],
-  defeat: ["퇴장~", "졌다아...", "후퇴!"],
-  check: ["체크!", "도망 못 가!"],
-  checkmate: ["체크메이트!", "끝났어!"],
+type PieceVoiceProfile = {
+  pitch: number;
+  rate: number;
+  toneRatio: number;
+  lines: Record<SoundCue, string[]>;
+};
+
+const defaultSoundLines: Record<SoundCue, string[]> = {
+  select: ["응?", "갈까요?", "저예요?"],
+  move: ["슝!", "사뿐!", "가볼게요!"],
+  attack: ["얍!", "받아주세요!", "틈이에요!"],
+  hurt: ["아잉!", "너무해요!", "히잉!"],
+  defeat: ["먼저 쉴게요", "졌어요오", "후퇴할게요"],
+  check: ["체크예요!", "조심하세요!"],
+  checkmate: ["체크메이트!", "끝났어요!"],
+};
+
+const pieceVoiceProfiles: Record<PieceSymbol, PieceVoiceProfile> = {
+  p: {
+    pitch: 1.92,
+    rate: 1.5,
+    toneRatio: 1.08,
+    lines: {
+      select: ["네에?", "제가요?", "불렀어요?"],
+      move: ["총총 갈게요", "한 칸씩!", "쪼르르"],
+      attack: ["콩!", "살짝 콕!", "미안해요!"],
+      hurt: ["아잉!", "아팠어요", "흐잉"],
+      defeat: ["먼저 쉴게요", "퇴근할게요", "졌어요오"],
+      check: ["체크예요!", "제가 해냈어요!"],
+      checkmate: ["제가 끝냈어요!", "이겼다아!"],
+    },
+  },
+  n: {
+    pitch: 1.82,
+    rate: 1.47,
+    toneRatio: 1.16,
+    lines: {
+      select: ["출동할까요?", "빙글 갈게요?", "제 차례죠?"],
+      move: ["점프할게요", "빙글 착지!", "깡총 아니고 점프!"],
+      attack: ["옆구리 콕!", "방심했죠?", "휘리릭!"],
+      hurt: ["어라라?", "넘어졌어요", "아야야"],
+      defeat: ["착지 실패요", "다음엔 이겨요", "잠깐 쉬어요"],
+      check: ["체크, 놀랐죠?", "길 막았어요!"],
+      checkmate: ["완벽 착지!", "체크메이트예요!"],
+    },
+  },
+  b: {
+    pitch: 1.74,
+    rate: 1.34,
+    toneRatio: 0.96,
+    lines: {
+      select: ["기도할까요?", "부드럽게요", "제가 볼게요"],
+      move: ["사선으로 살랑", "빛 따라 갈게요", "조용히 갈게요"],
+      attack: ["반짝 찌르기", "빈틈 보였어요", "빛이에요!"],
+      hurt: ["아프네요", "너무하세요", "흐음"],
+      defeat: ["기도는 여기까지", "잠시 물러나요", "졌네요"],
+      check: ["성스러운 체크", "왕관이 보여요"],
+      checkmate: ["기도가 닿았어요", "체크메이트입니다"],
+    },
+  },
+  r: {
+    pitch: 1.62,
+    rate: 1.28,
+    toneRatio: 0.88,
+    lines: {
+      select: ["지켜드릴게요", "정면인가요?", "든든하게요"],
+      move: ["직진합니다", "성큼 갈게요", "길을 열게요"],
+      attack: ["꽝이에요!", "밀어붙여요!", "정면 돌파!"],
+      hurt: ["버틸게요", "꽤 아파요", "아직 괜찮아요"],
+      defeat: ["방어 실패요", "성문 닫아요", "물러납니다"],
+      check: ["정면 체크!", "피할 길 없어요"],
+      checkmate: ["방어선 완성!", "체크메이트예요"],
+    },
+  },
+  q: {
+    pitch: 1.7,
+    rate: 1.36,
+    toneRatio: 1.02,
+    lines: {
+      select: ["맡겨주세요", "여왕님 등장이에요", "화려하게요?"],
+      move: ["반짝 이동", "우아하게 갈게요", "무대 중앙으로"],
+      attack: ["피날레예요!", "반짝 끝!", "제 차례예요!"],
+      hurt: ["어머?", "드레스 구겨졌어요", "무례해요"],
+      defeat: ["오늘은 봐드릴게요", "왕관은 맡길게요", "퇴장합니다"],
+      check: ["체크, 우아하게", "도망치지 마세요"],
+      checkmate: ["체크메이트예요", "무대 종료예요"],
+    },
+  },
+  k: {
+    pitch: 1.56,
+    rate: 1.22,
+    toneRatio: 0.82,
+    lines: {
+      select: ["나 지켜줘요", "왕관 조심", "천천히 갈래요"],
+      move: ["살금살금", "한 발만요", "조심히 갈게요"],
+      attack: ["저도 할 수 있어요", "살짝만!", "왕관 펀치!"],
+      hurt: ["꺄악!", "큰일이에요", "도와줘요"],
+      defeat: ["왕관 내려놔요", "졌어요...", "다음 판 가요"],
+      check: ["저 체크래요!", "위험해요!"],
+      checkmate: ["체크메이트라니", "왕국 종료예요"],
+    },
+  },
+};
+
+const soundPriority: Record<SoundCue, number> = {
+  select: 1,
+  move: 1,
+  hurt: 2,
+  attack: 3,
+  defeat: 4,
+  check: 5,
+  checkmate: 6,
 };
 
 function createOChessAudioEngine(): OChessAudioEngine {
@@ -940,6 +1048,21 @@ function createOChessAudioEngine(): OChessAudioEngine {
   let musicGain: GainNode | null = null;
   let musicTimer: number | null = null;
   let musicBar = 0;
+  let activeVoiceToken = 0;
+  let pendingVoice: VoiceRequest | null = null;
+  let voiceTimer: number | null = null;
+  let lastVoiceStartedAt = 0;
+
+  type VoiceRequest = {
+    cue: SoundCue;
+    piece?: PieceSymbol;
+    text: string;
+    pitch: number;
+    rate: number;
+    volume: number;
+    priority: number;
+    createdAt: number;
+  };
 
   function ensureContext(): AudioContext | null {
     if (typeof window === "undefined") {
@@ -1113,11 +1236,15 @@ function createOChessAudioEngine(): OChessAudioEngine {
     }
 
     const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find((voice) =>
-      /yuna|kyoko|nanami|haruka|heami|google.*(한국|日本語|japanese|korean)/i.test(
-        voice.name,
-      ),
-    );
+    const preferredVoice = voices.find((voice) => {
+      const name = voice.name.toLowerCase();
+      const lang = voice.lang.toLowerCase();
+
+      return (
+        /yuna|sora|kyoko|nanami|haruka|sayaka|miyu|heami|sunhi|nayeon/i.test(name) ||
+        (/google/i.test(name) && (/ko|ja|korean|japanese|한국|日本語/i.test(name) || /^ko|^ja/.test(lang)))
+      );
+    });
 
     return (
       preferredVoice ??
@@ -1127,15 +1254,65 @@ function createOChessAudioEngine(): OChessAudioEngine {
     );
   }
 
-  function speak(cue: SoundCue) {
+  function stopVoiceLane() {
+    if (typeof window !== "undefined" && voiceTimer !== null) {
+      window.clearTimeout(voiceTimer);
+    }
+
+    voiceTimer = null;
+    pendingVoice = null;
+    activeVoiceToken = 0;
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  function voiceDurationMs(request: VoiceRequest): number {
+    const textLength = [...request.text].length;
+    const cueBase = request.cue === "checkmate" ? 620 : request.cue === "defeat" ? 520 : 420;
+
+    return Math.min(880, Math.max(360, cueBase + (textLength * 26) / request.rate));
+  }
+
+  function finishVoice(token: number) {
+    if (token !== activeVoiceToken) {
+      return;
+    }
+
+    if (typeof window !== "undefined" && voiceTimer !== null) {
+      window.clearTimeout(voiceTimer);
+    }
+
+    voiceTimer = null;
+    activeVoiceToken = 0;
+
+    if (!pendingVoice) {
+      return;
+    }
+
+    const nextVoice = pendingVoice;
+    pendingVoice = null;
+
+    if (Date.now() - nextVoice.createdAt > 900) {
+      return;
+    }
+
+    const wait = Math.max(0, 110 - (Date.now() - lastVoiceStartedAt));
+    voiceTimer = window.setTimeout(() => startVoice(nextVoice), wait);
+  }
+
+  function startVoice(request: VoiceRequest) {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       return;
     }
 
-    const options = soundLines[cue];
-    const utterance = new SpeechSynthesisUtterance(
-      options[Math.floor(Math.random() * options.length)],
-    );
+    const token = activeVoiceToken + 1;
+    activeVoiceToken = token;
+    lastVoiceStartedAt = Date.now();
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(request.text);
     const voice = chooseVoice();
 
     if (voice) {
@@ -1145,53 +1322,124 @@ function createOChessAudioEngine(): OChessAudioEngine {
       utterance.lang = "ko-KR";
     }
 
-    utterance.pitch = cue === "defeat" ? 1.42 : 1.78;
-    utterance.rate = cue === "checkmate" ? 1.18 : 1.38;
-    utterance.volume = cue === "hurt" ? 0.8 : 0.72;
+    utterance.pitch = request.pitch;
+    utterance.rate = request.rate;
+    utterance.volume = request.volume;
+    utterance.onend = () => finishVoice(token);
+    utterance.onerror = () => finishVoice(token);
+
     window.speechSynthesis.speak(utterance);
+
+    if (voiceTimer !== null) {
+      window.clearTimeout(voiceTimer);
+    }
+
+    voiceTimer = window.setTimeout(() => finishVoice(token), voiceDurationMs(request));
+  }
+
+  function queueVoice(request: VoiceRequest) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      return;
+    }
+
+    if (activeVoiceToken !== 0) {
+      if (!pendingVoice || request.priority >= pendingVoice.priority) {
+        pendingVoice = request;
+      }
+      return;
+    }
+
+    const wait = Math.max(0, 110 - (Date.now() - lastVoiceStartedAt));
+    if (wait > 0) {
+      pendingVoice = request;
+
+      if (voiceTimer === null) {
+        voiceTimer = window.setTimeout(() => {
+          const nextVoice = pendingVoice;
+          pendingVoice = null;
+          voiceTimer = null;
+
+          if (nextVoice) {
+            startVoice(nextVoice);
+          }
+        }, wait);
+      }
+      return;
+    }
+
+    startVoice(request);
+  }
+
+  function buildVoiceRequest(cue: SoundCue, piece?: PieceSymbol): VoiceRequest {
+    const profile = piece ? pieceVoiceProfiles[piece] : null;
+    const options = profile?.lines[cue] ?? defaultSoundLines[cue];
+    const text = options[Math.floor(Math.random() * options.length)];
+    const cuePitchOffset = cue === "hurt" ? 0.08 : cue === "defeat" ? -0.14 : cue === "checkmate" ? 0.02 : 0;
+    const cueRateOffset = cue === "checkmate" ? -0.12 : cue === "defeat" ? -0.08 : 0;
+
+    return {
+      cue,
+      piece,
+      text,
+      pitch: Math.min(2, Math.max(1.1, (profile?.pitch ?? 1.78) + cuePitchOffset)),
+      rate: Math.min(1.62, Math.max(1.08, (profile?.rate ?? 1.38) + cueRateOffset)),
+      volume: cue === "hurt" || cue === "defeat" ? 0.72 : 0.64,
+      priority: soundPriority[cue],
+      createdAt: Date.now(),
+    };
+  }
+
+  function speak(cue: SoundCue, piece?: PieceSymbol) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      return;
+    }
+
+    queueVoice(buildVoiceRequest(cue, piece));
   }
 
   return {
-    play(cue) {
+    play(cue, detail) {
+      const toneRatio = detail?.piece ? pieceVoiceProfiles[detail.piece].toneRatio : 1;
+
       switch (cue) {
         case "select":
-          playTone(760, 0, 0.075, 0.055);
-          playTone(1140, 0.04, 0.09, 0.04);
-          speak(cue);
+          playTone(760 * toneRatio, 0, 0.075, 0.055);
+          playTone(1140 * toneRatio, 0.04, 0.09, 0.04);
+          speak(cue, detail?.piece);
           break;
         case "move":
-          playTone(540, 0, 0.08, 0.04, "sine");
-          playTone(860, 0.045, 0.1, 0.045, "triangle");
-          speak(cue);
+          playTone(540 * toneRatio, 0, 0.08, 0.04, "sine");
+          playTone(860 * toneRatio, 0.045, 0.1, 0.045, "triangle");
+          speak(cue, detail?.piece);
           break;
         case "attack":
-          playTone(420, 0, 0.06, 0.07, "sawtooth");
-          playTone(940, 0.045, 0.12, 0.06, "triangle");
+          playTone(420 * toneRatio, 0, 0.06, 0.07, "sawtooth");
+          playTone(940 * toneRatio, 0.045, 0.12, 0.06, "triangle");
           playNoise(0.035, 0.08, 0.055);
-          speak(cue);
+          speak(cue, detail?.piece);
           break;
         case "hurt":
-          playTone(720, 0, 0.06, 0.045, "square");
-          playTone(410, 0.05, 0.1, 0.04, "triangle");
+          playTone(720 * toneRatio, 0, 0.06, 0.045, "square");
+          playTone(410 * toneRatio, 0.05, 0.1, 0.04, "triangle");
           playNoise(0.015, 0.07, 0.035);
-          speak(cue);
+          speak(cue, detail?.piece);
           break;
         case "defeat":
-          playTone(520, 0, 0.12, 0.04, "triangle");
-          playTone(320, 0.11, 0.16, 0.04, "sine");
-          speak(cue);
+          playTone(520 * toneRatio, 0, 0.12, 0.04, "triangle");
+          playTone(320 * toneRatio, 0.11, 0.16, 0.04, "sine");
+          speak(cue, detail?.piece);
           break;
         case "check":
-          playTone(800, 0, 0.08, 0.06);
-          playTone(1180, 0.07, 0.12, 0.055);
-          playTone(1480, 0.14, 0.13, 0.048);
-          speak(cue);
+          playTone(800 * toneRatio, 0, 0.08, 0.06);
+          playTone(1180 * toneRatio, 0.07, 0.12, 0.055);
+          playTone(1480 * toneRatio, 0.14, 0.13, 0.048);
+          speak(cue, detail?.piece);
           break;
         case "checkmate":
-          playTone(680, 0, 0.08, 0.06);
-          playTone(980, 0.08, 0.1, 0.055);
-          playTone(1320, 0.18, 0.18, 0.052);
-          speak(cue);
+          playTone(680 * toneRatio, 0, 0.08, 0.06);
+          playTone(980 * toneRatio, 0.08, 0.1, 0.055);
+          playTone(1320 * toneRatio, 0.18, 0.18, 0.052);
+          speak(cue, detail?.piece);
           break;
       }
     },
@@ -1226,6 +1474,9 @@ function createOChessAudioEngine(): OChessAudioEngine {
         musicGain.gain.setValueAtTime(Math.max(musicGain.gain.value, 0.0001), now);
         musicGain.gain.linearRampToValueAtTime(0.0001, now + 0.28);
       }
+    },
+    stopVoices() {
+      stopVoiceLane();
     },
   };
 }
@@ -1355,7 +1606,7 @@ export default function App() {
     setGhosts([]);
   }
 
-  function playSound(cue: SoundCue) {
+  function playSound(cue: SoundCue, piece?: PieceSymbol) {
     if (!soundEnabled) {
       return;
     }
@@ -1364,7 +1615,7 @@ export default function App() {
       audioRef.current = createOChessAudioEngine();
     }
 
-    audioRef.current.play(cue);
+    audioRef.current.play(cue, { piece });
   }
 
   function startMusicIfEnabled() {
@@ -1390,6 +1641,8 @@ export default function App() {
       }
 
       audioRef.current.play("select");
+    } else {
+      audioRef.current?.stopVoices();
     }
   }
 
@@ -1460,8 +1713,11 @@ export default function App() {
           : undefined;
 
       if (to) {
+        const movedPiece = nextGame.get(to)?.type;
+
         triggerMoveMotion(
           to,
+          movedPiece,
           capturedType && capturedColor ? { type: capturedType, color: capturedColor } : null,
           (state.captureSquare || to) as Square,
           resultCue,
@@ -1737,11 +1993,12 @@ export default function App() {
 
   function triggerMoveMotion(
     to: Square,
+    movedPiece: PieceSymbol | undefined,
     capturedPiece: Piece | null,
     captureSquare: Square = to,
     resultCue?: Extract<SoundCue, "check" | "checkmate">,
   ) {
-    playSound(capturedPiece ? "attack" : "move");
+    playSound(capturedPiece ? "attack" : "move", movedPiece);
 
     setMotions((current) => ({
       ...current,
@@ -1751,7 +2008,7 @@ export default function App() {
 
     if (!capturedPiece) {
       if (resultCue) {
-        window.setTimeout(() => playSound(resultCue), 150);
+        window.setTimeout(() => playSound(resultCue, movedPiece), 150);
       }
 
       return;
@@ -1765,7 +2022,7 @@ export default function App() {
     ]);
 
     window.setTimeout(() => {
-      playSound("hurt");
+      playSound("hurt", capturedPiece.type);
     }, 150);
 
     window.setTimeout(() => {
@@ -1774,11 +2031,11 @@ export default function App() {
           ghost.id === id ? { ...ghost, state: "defeated" } : ghost,
         ),
       );
-      playSound("defeat");
+      playSound("defeat", capturedPiece.type);
     }, 260);
 
     if (resultCue) {
-      window.setTimeout(() => playSound(resultCue), 520);
+      window.setTimeout(() => playSound(resultCue, movedPiece), 520);
     }
 
     window.setTimeout(() => {
@@ -1791,7 +2048,7 @@ export default function App() {
 
     const piece = game.get(square);
     if (piece?.color === game.turn()) {
-      playSound("select");
+      playSound("select", piece.type);
       setSelected(square);
       return;
     }
@@ -1817,7 +2074,7 @@ export default function App() {
     setFen(game.fen());
     setSelected(null);
     setPendingPromotion(null);
-    triggerMoveMotion(move.to, capturedPiece, captureSquare, resultCue);
+    triggerMoveMotion(move.to, move.piece, capturedPiece, captureSquare, resultCue);
   }
 
   function submitMove(from: Square, to: Square, promotion?: PieceSymbol) {

@@ -16,6 +16,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "smoke:visual:install": "node scripts/install_visual_browser.mjs",
     "smoke:multi": "node scripts/multiplayer_smoke.mjs",
+    "smoke:voice": "node scripts/voice_smoke.mjs",
     "smoke:visual": "node scripts/visual_smoke.mjs",
     "quality:visual": "npm run build && npm run smoke:visual"
   },
