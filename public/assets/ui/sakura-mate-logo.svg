@@ -1,0 +1,54 @@
+<svg width="1100" height="390" viewBox="0 0 1100 390" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="titleFill" x1="190" y1="100" x2="890" y2="285" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF7E9"/>
+      <stop offset="0.36" stop-color="#FFD8E2"/>
+      <stop offset="0.72" stop-color="#F2C46D"/>
+      <stop offset="1" stop-color="#FFF0C7"/>
+    </linearGradient>
+    <linearGradient id="ribbonFill" x1="190" y1="268" x2="910" y2="326" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2E6568" stop-opacity="0.92"/>
+      <stop offset="0.5" stop-color="#C45D73" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#2E6568" stop-opacity="0.92"/>
+    </linearGradient>
+    <radialGradient id="petalFill" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0) rotate(90) scale(28 18)">
+      <stop stop-color="#FFF7F3"/>
+      <stop offset="0.55" stop-color="#F8B7C4"/>
+      <stop offset="1" stop-color="#C45D73"/>
+    </radialGradient>
+    <filter id="softShadow" x="-10%" y="-20%" width="120%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="13" flood-color="#140D09" flood-opacity="0.32"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="0" flood-color="#5B3D2A" flood-opacity="0.34"/>
+    </filter>
+    <filter id="petalShadow" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#5B3D2A" flood-opacity="0.24"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#softShadow)">
+    <path d="M167 287C228 250 335 232 547 232C759 232 876 250 933 287C882 327 734 347 550 347C365 347 217 327 167 287Z" fill="url(#ribbonFill)" opacity="0.84"/>
+    <path d="M191 289C254 263 371 251 550 251C728 251 846 263 909 289" stroke="#FFF7E9" stroke-width="5" stroke-linecap="round" opacity="0.52"/>
+
+    <text x="550" y="95" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="900" letter-spacing="13" fill="#E5B965">SAKURA MATE</text>
+
+    <text x="550" y="228" text-anchor="middle" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif" font-size="132" font-weight="950" letter-spacing="-2" stroke="#5B3D2A" stroke-width="24" stroke-linejoin="round">사쿠라메이트</text>
+    <text x="550" y="228" text-anchor="middle" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif" font-size="132" font-weight="950" letter-spacing="-2" stroke="#FFF7E9" stroke-width="9" stroke-linejoin="round">사쿠라메이트</text>
+    <text x="550" y="228" text-anchor="middle" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif" font-size="132" font-weight="950" letter-spacing="-2" fill="url(#titleFill)">사쿠라메이트</text>
+
+    <path d="M455 52L475 82L512 69L492 101L516 132L479 122L456 153L452 114L415 103L449 87L455 52Z" fill="#E5B965" stroke="#5B3D2A" stroke-width="9" stroke-linejoin="round"/>
+    <circle cx="455" cy="52" r="9" fill="#FFF0C7" stroke="#5B3D2A" stroke-width="5"/>
+    <circle cx="512" cy="69" r="8" fill="#FFF0C7" stroke="#5B3D2A" stroke-width="5"/>
+    <circle cx="516" cy="132" r="8" fill="#FFF0C7" stroke="#5B3D2A" stroke-width="5"/>
+  </g>
+
+  <g filter="url(#petalShadow)">
+    <path d="M125 138C147 115 174 116 185 137C165 145 144 153 125 138Z" fill="url(#petalFill)" transform="rotate(-18 155 134)"/>
+    <path d="M923 121C946 97 975 102 982 124C958 129 941 144 923 121Z" fill="url(#petalFill)" transform="rotate(22 952 121)"/>
+    <path d="M888 274C910 255 935 260 941 281C920 285 903 295 888 274Z" fill="url(#petalFill)" transform="rotate(-30 915 276)"/>
+    <path d="M232 279C254 260 279 265 285 286C264 290 247 300 232 279Z" fill="url(#petalFill)" transform="rotate(28 259 281)"/>
+    <circle cx="156" cy="145" r="5" fill="#FBE2D1"/>
+    <circle cx="950" cy="126" r="5" fill="#FBE2D1"/>
+    <circle cx="916" cy="281" r="4" fill="#FBE2D1"/>
+    <circle cx="260" cy="286" r="4" fill="#FBE2D1"/>
+  </g>
+</svg>

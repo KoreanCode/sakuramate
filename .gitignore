@@ -1,0 +1,30 @@
+node_modules/
+dist/
+
+# Local caches and generated test output
+.npm-cache/
+.playwright-browsers/
+tmp/
+coverage/
+.vite/
+*.log
+tsconfig.tsbuildinfo
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.key
+*.crt
+*.cert
+
+# Local agent/project workflow state
+.agents/
+.hyper/
+AGENTS.md
+plan.md
+
+# OS metadata
+.DS_Store
