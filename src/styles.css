@@ -54,6 +54,11 @@ body {
   cursor: var(--cursor-default);
 }
 
+html.mobile-input-scroll-locked,
+body.mobile-input-scroll-locked {
+  overscroll-behavior: none;
+}
+
 button {
   font: inherit;
   cursor: var(--cursor-action);

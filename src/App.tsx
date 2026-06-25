@@ -1230,11 +1230,140 @@ function createOChessAudioEngine(): OChessAudioEngine {
   };
 }
 
+function useMobileInputScrollGuard() {
+  useEffect(() => {
+    const inputSelector = "input, textarea, select";
+    const mobileQuery = window.matchMedia("(max-width: 768px), (pointer: coarse)");
+    const previousBodyStyle = {
+      left: "",
+      overflow: "",
+      position: "",
+      right: "",
+      top: "",
+      width: "",
+    };
+    let locked = false;
+    let lockedScrollY = 0;
+    let unlockTimer: number | null = null;
+
+    function isInputTarget(target: EventTarget | null): target is HTMLElement {
+      return target instanceof HTMLElement && Boolean(target.closest(inputSelector));
+    }
+
+    function hasFocusedInput() {
+      return (
+        document.activeElement instanceof HTMLElement &&
+        Boolean(document.activeElement.closest(inputSelector))
+      );
+    }
+
+    function clearUnlockTimer() {
+      if (unlockTimer !== null) {
+        window.clearTimeout(unlockTimer);
+        unlockTimer = null;
+      }
+    }
+
+    function stabilizeScroll() {
+      if (!locked) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        window.scrollTo(0, lockedScrollY);
+      });
+    }
+
+    function lockScroll() {
+      if (locked || !mobileQuery.matches) {
+        return;
+      }
+
+      const body = document.body;
+      lockedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      previousBodyStyle.position = body.style.position;
+      previousBodyStyle.top = body.style.top;
+      previousBodyStyle.left = body.style.left;
+      previousBodyStyle.right = body.style.right;
+      previousBodyStyle.width = body.style.width;
+      previousBodyStyle.overflow = body.style.overflow;
+
+      document.documentElement.classList.add("mobile-input-scroll-locked");
+      body.classList.add("mobile-input-scroll-locked");
+      body.style.position = "fixed";
+      body.style.top = `-${lockedScrollY}px`;
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.width = "100%";
+      body.style.overflow = "hidden";
+      locked = true;
+      stabilizeScroll();
+    }
+
+    function unlockScroll() {
+      if (!locked) {
+        return;
+      }
+
+      const restoreY = lockedScrollY;
+      const body = document.body;
+      locked = false;
+      document.documentElement.classList.remove("mobile-input-scroll-locked");
+      body.classList.remove("mobile-input-scroll-locked");
+      body.style.position = previousBodyStyle.position;
+      body.style.top = previousBodyStyle.top;
+      body.style.left = previousBodyStyle.left;
+      body.style.right = previousBodyStyle.right;
+      body.style.width = previousBodyStyle.width;
+      body.style.overflow = previousBodyStyle.overflow;
+      window.scrollTo(0, restoreY);
+    }
+
+    function handleInputStart(event: Event) {
+      if (!isInputTarget(event.target)) {
+        return;
+      }
+
+      clearUnlockTimer();
+      lockScroll();
+    }
+
+    function handleFocusOut() {
+      clearUnlockTimer();
+      unlockTimer = window.setTimeout(() => {
+        if (!hasFocusedInput()) {
+          unlockScroll();
+        }
+      }, 120);
+    }
+
+    document.addEventListener("pointerdown", handleInputStart, true);
+    document.addEventListener("touchstart", handleInputStart, true);
+    document.addEventListener("focusin", handleInputStart, true);
+    document.addEventListener("focusout", handleFocusOut, true);
+    window.visualViewport?.addEventListener("resize", stabilizeScroll);
+    window.visualViewport?.addEventListener("scroll", stabilizeScroll);
+
+    return () => {
+      clearUnlockTimer();
+      document.removeEventListener("pointerdown", handleInputStart, true);
+      document.removeEventListener("touchstart", handleInputStart, true);
+      document.removeEventListener("focusin", handleInputStart, true);
+      document.removeEventListener("focusout", handleFocusOut, true);
+      window.visualViewport?.removeEventListener("resize", stabilizeScroll);
+      window.visualViewport?.removeEventListener("scroll", stabilizeScroll);
+      unlockScroll();
+    };
+  }, []);
+}
+
 export default function App() {
   const initialStateRef = useRef<InitialGameState | null>(null);
   if (!initialStateRef.current) {
     initialStateRef.current = readInitialGameState();
   }
+
+  useMobileInputScrollGuard();
 
   const gameRef = useRef(initialStateRef.current.game);
   const ghostIdRef = useRef(0);
